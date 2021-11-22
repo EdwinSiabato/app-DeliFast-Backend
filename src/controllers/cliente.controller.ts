@@ -1,3 +1,4 @@
+import {service} from '@loopback/core';
 import {
   Count,
   CountSchema,
@@ -16,15 +17,61 @@ import {
   del,
   requestBody,
   response,
+  HttpErrors,
 } from '@loopback/rest';
-import {Cliente} from '../models';
+import {Llaves} from '../config/llaves';
+import {Cliente, Credenciales} from '../models';
 import {ClienteRepository} from '../repositories';
+import {AutenticacionService} from '../services';
+const fetch = require("node-fetch");
 
 export class ClienteController {
   constructor(
     @repository(ClienteRepository)
     public clienteRepository : ClienteRepository,
+    @service(AutenticacionService)
+    public servicioAutenticacion: AutenticacionService
   ) {}
+
+
+@post("/identificarCliente", {
+  responses:{
+    '200':{
+      description: "Identificacion de usuarios"
+    }
+
+  }
+
+})
+async identificarCliente(
+  @requestBody() credenciales: Credenciales
+
+){
+
+let p = await this.servicioAutenticacion.IdentificarCliente(credenciales.usuario, credenciales.clave);
+if(p){
+  let token = this.servicioAutenticacion.GenerarTokenJWT(p);
+  return{
+    datos: {
+      nombre: p.nombre,
+      email: p.email,
+      id: p.id
+
+    },
+    tk: token
+
+  }
+}else{
+  throw new HttpErrors[401]("Datos Invalidos");
+}
+
+}
+
+
+
+
+
+
 
   @post('/clientes')
   @response(200, {
@@ -44,7 +91,22 @@ export class ClienteController {
     })
     cliente: Omit<Cliente, 'id'>,
   ): Promise<Cliente> {
-    return this.clienteRepository.create(cliente);
+
+    let clave = this.servicioAutenticacion.GenerarClave();
+    let claveCifrada = this.servicioAutenticacion.CifrarClave(clave);
+    cliente.clave = claveCifrada;
+    let p = await this.clienteRepository.create(cliente);
+
+    //Notificar al usuario
+    let destino = cliente.email;
+    let asunto = "Mi registro en DeliFast"
+    let contenido = `Hola ${cliente.nombre}, su nombre de usuario es: ${cliente.email} y su contraseña es ${clave}`;
+    fetch(`${Llaves.urlServicioNotificaciones}/envio-correo?correo_destino=${destino}&asunto=${asunto}&contenido=${contenido}`)
+    .then((data:any) => {
+      console.log(data);
+    })
+    return p;
+
   }
 
   @get('/clientes/count')

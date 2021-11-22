@@ -34,6 +34,18 @@ export class Cliente extends Entity {
   })
   direccion: string;
 
+  @property({
+    type: 'string',
+    required: false,
+  })
+  clave: string;
+
+  @property({
+    type: 'string',
+    required: true,
+  })
+  email: string;
+
   @hasMany(() => Servicio)
   servicios: Servicio[];
 
